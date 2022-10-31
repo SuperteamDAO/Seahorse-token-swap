@@ -65,7 +65,9 @@ def create_premium_mint_reserve(
  token_bump = premium_account.bump()
  premium_account = premium_account.init(
   payer = payer, 
-  seeds = ['premium-tokens', premium_mint_reserve_acc.key()], 
+  seeds = ['premium-tokens', 
+  #premium_mint_reserve_acc.key()
+  ], 
   mint = premium_mint, 
   authority = premium_mint_reserve_acc, 
  )
@@ -73,7 +75,7 @@ def create_premium_mint_reserve(
  premium_mint_reserve_acc.premium_account = premium_account.key()
  premium_mint_reserve_acc.initialization_timestamp = clock.unix_timestamp()
  premium_mint_reserve_acc.seed_string  = seed_string
- premium_mint_reserve_acc.authority = payer.key()
+ premium_mint_reserve_acc.creator = payer.key()
  premium_mint_reserve_acc.bump = bump
  premium_mint_reserve_acc.token_bump = token_bump
  premium_mint_reserve_acc.normal_mints = normal_mints
@@ -98,13 +100,17 @@ def create_normal_mint_reserve(
  bump =  normal_mint_reserve_acc.bump()
  normal_mint_reserve_acc = normal_mint_reserve_acc.init(
   payer = payer,
-  seeds = ['normal-mint-reserve', premium_mint_reserve_acc.key(), normal_mint.key()]
+  seeds = [
+    'normal-mint-reserve', # normal_mint.key()], #premium_mint_reserve_acc.key()
+   ]
  )
 
  token_bump = normal_token_account.bump()
  normal_token_account = normal_token_account.init(
   payer = payer,
-  seeds = ['normal-token-account', normal_mint_reserve_acc.key()],
+  seeds = ['normal-token-account', 
+  #normal_mint_reserve_acc.key()
+  ],
   mint = normal_mint,
   authority  = normal_mint_reserve_acc, 
  )
@@ -132,7 +138,7 @@ def withdraw_premium_tokens(
   destination: TokenAccount,
   amount: u64,
 ):
- assert(premium_mint_reserve_acc.authority == authority.key()), "Invalid Authority"
+ assert(premium_mint_reserve_acc.creator == authority.key()), "Invalid Authority"
  assert(premium_mint_reserve_acc.premium_account == premium_account.key()), "Invalid Premium token account"
 
  premium_account.transfer(
@@ -150,7 +156,7 @@ def withdraw_normal_tokens(
   destination: TokenAccount,
   amount: u64, 
  ):
-  assert (premium_mint_reserve_acc.authority == authority.key()), "Invalid authority"
+  assert (premium_mint_reserve_acc.creator == authority.key()), "Invalid authority"
   assert (normal_mint_reserve_acc.premium_mint_reserve_acc == premium_mint_reserve_acc.key()), "The normal reserve and the premium reserve are not related"
   assert (normal_mint_reserve_acc.normal_token_account == normal_token_account.key()), "Invalid normal_token account"
 

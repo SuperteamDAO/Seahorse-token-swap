@@ -147,95 +147,6 @@ mod token_swap {
     use std::collections::HashMap;
 
     #[derive(Accounts)]
-    # [instruction (go_live_ts : i64 , initialization_ts : i64)]
-    pub struct CreateNormalMintReserve<'info> {
-        #[account(mut)]
-        pub auth: Signer<'info>,
-        # [account (init , payer = auth , seeds = ["normal-token-account" . as_bytes () . as_ref () , auth . key () . as_ref ()] , bump , token :: mint = normal_mint , token :: authority = normal_mint_reserve_acc)]
-        pub normal_token_account: Box<Account<'info, TokenAccount>>,
-        # [account (init , space = std :: mem :: size_of :: < dot :: program :: NormalMintReserve > () + 8 , payer = auth , seeds = ["normal-mint-reserve" . as_bytes () . as_ref ()] , bump)]
-        pub normal_mint_reserve_acc: Box<Account<'info, dot::program::NormalMintReserve>>,
-        #[account(mut)]
-        pub premium_mint_reserve_acc: Box<Account<'info, dot::program::PremiumMintReserve>>,
-        #[account(mut)]
-        pub normal_mint: Box<Account<'info, Mint>>,
-        #[account(mut)]
-        pub clock: Sysvar<'info, Clock>,
-        pub token_program: Program<'info, Token>,
-        pub rent: Sysvar<'info, Rent>,
-        pub system_program: Program<'info, System>,
-    }
-
-    pub fn create_normal_mint_reserve(
-        ctx: Context<CreateNormalMintReserve>,
-        go_live_ts: i64,
-        initialization_ts: i64,
-    ) -> Result<()> {
-        let mut programs = HashMap::new();
-
-        programs.insert(
-            "token_program",
-            ctx.accounts.token_program.to_account_info(),
-        );
-
-        programs.insert(
-            "system_program",
-            ctx.accounts.system_program.to_account_info(),
-        );
-
-        let programs_map = ProgramsMap(programs);
-        let auth = SeahorseSigner {
-            account: &ctx.accounts.auth,
-            programs: &programs_map,
-        };
-
-        let normal_token_account = Empty {
-            account: SeahorseAccount {
-                account: &ctx.accounts.normal_token_account,
-                programs: &programs_map,
-            },
-            bump: ctx.bumps.get("normal_token_account").map(|bump| *bump),
-        };
-
-        let normal_mint_reserve_acc = Empty {
-            account: dot::program::NormalMintReserve::load(
-                &mut ctx.accounts.normal_mint_reserve_acc,
-                &programs_map,
-            ),
-            bump: ctx.bumps.get("normal_mint_reserve_acc").map(|bump| *bump),
-        };
-
-        let premium_mint_reserve_acc = dot::program::PremiumMintReserve::load(
-            &mut ctx.accounts.premium_mint_reserve_acc,
-            &programs_map,
-        );
-
-        let normal_mint = SeahorseAccount {
-            account: &ctx.accounts.normal_mint,
-            programs: &programs_map,
-        };
-
-        let clock = &ctx.accounts.clock.clone();
-
-        create_normal_mint_reserve_handler(
-            auth.clone(),
-            normal_token_account.clone(),
-            normal_mint_reserve_acc.clone(),
-            premium_mint_reserve_acc.clone(),
-            normal_mint.clone(),
-            go_live_ts,
-            initialization_ts,
-            clock.clone(),
-        );
-
-        dot::program::NormalMintReserve::store(normal_mint_reserve_acc.account);
-
-        dot::program::PremiumMintReserve::store(premium_mint_reserve_acc);
-
-        return Ok(());
-    }
-
-    #[derive(Accounts)]
     # [instruction (amount : u64)]
     pub struct SwapPremiumTokensForNormalTokens<'info> {
         #[account(mut)]
@@ -327,62 +238,6 @@ mod token_swap {
 
     #[derive(Accounts)]
     # [instruction (amount : u64)]
-    pub struct WithdrawPremiumTokens<'info> {
-        #[account(mut)]
-        pub authority: Signer<'info>,
-        #[account(mut)]
-        pub premium_mint_reserve_acc: Box<Account<'info, dot::program::PremiumMintReserve>>,
-        #[account(mut)]
-        pub premium_account: Box<Account<'info, TokenAccount>>,
-        #[account(mut)]
-        pub destination: Box<Account<'info, TokenAccount>>,
-        pub token_program: Program<'info, Token>,
-    }
-
-    pub fn withdraw_premium_tokens(ctx: Context<WithdrawPremiumTokens>, amount: u64) -> Result<()> {
-        let mut programs = HashMap::new();
-
-        programs.insert(
-            "token_program",
-            ctx.accounts.token_program.to_account_info(),
-        );
-
-        let programs_map = ProgramsMap(programs);
-        let authority = SeahorseSigner {
-            account: &ctx.accounts.authority,
-            programs: &programs_map,
-        };
-
-        let premium_mint_reserve_acc = dot::program::PremiumMintReserve::load(
-            &mut ctx.accounts.premium_mint_reserve_acc,
-            &programs_map,
-        );
-
-        let premium_account = SeahorseAccount {
-            account: &ctx.accounts.premium_account,
-            programs: &programs_map,
-        };
-
-        let destination = SeahorseAccount {
-            account: &ctx.accounts.destination,
-            programs: &programs_map,
-        };
-
-        withdraw_premium_tokens_handler(
-            authority.clone(),
-            premium_mint_reserve_acc.clone(),
-            premium_account.clone(),
-            destination.clone(),
-            amount,
-        );
-
-        dot::program::PremiumMintReserve::store(premium_mint_reserve_acc);
-
-        return Ok(());
-    }
-
-    #[derive(Accounts)]
-    # [instruction (amount : u64)]
     pub struct WithdrawNormalTokens<'info> {
         #[account(mut)]
         pub authority: Signer<'info>,
@@ -443,87 +298,6 @@ mod token_swap {
         dot::program::PremiumMintReserve::store(premium_mint_reserve_acc);
 
         dot::program::NormalMintReserve::store(normal_mint_reserve_acc);
-
-        return Ok(());
-    }
-
-    #[derive(Accounts)]
-    # [instruction (go_live_timestamp : i64 , normal_mints : u32 , seed_string : String)]
-    pub struct CreatePremiumMintReserve<'info> {
-        #[account(mut)]
-        pub auth: Signer<'info>,
-        # [account (init , space = std :: mem :: size_of :: < dot :: program :: PremiumMintReserve > () + 8 , payer = auth , seeds = ["entangler" . as_bytes () . as_ref () , premium_mint . key () . as_ref () , seed_string . as_bytes () . as_ref ()] , bump)]
-        pub premium_mint_reserve_acc: Box<Account<'info, dot::program::PremiumMintReserve>>,
-        #[account(mut)]
-        pub premium_mint: Box<Account<'info, Mint>>,
-        # [account (init , payer = auth , seeds = ["storage" . as_bytes () . as_ref () , auth . key () . as_ref ()] , bump , token :: mint = premium_mint , token :: authority = premium_mint_reserve_acc)]
-        pub premium_account: Box<Account<'info, TokenAccount>>,
-        #[account(mut)]
-        pub clock: Sysvar<'info, Clock>,
-        pub system_program: Program<'info, System>,
-        pub rent: Sysvar<'info, Rent>,
-        pub token_program: Program<'info, Token>,
-    }
-
-    pub fn create_premium_mint_reserve(
-        ctx: Context<CreatePremiumMintReserve>,
-        go_live_timestamp: i64,
-        normal_mints: u32,
-        seed_string: String,
-    ) -> Result<()> {
-        let mut programs = HashMap::new();
-
-        programs.insert(
-            "system_program",
-            ctx.accounts.system_program.to_account_info(),
-        );
-
-        programs.insert(
-            "token_program",
-            ctx.accounts.token_program.to_account_info(),
-        );
-
-        let programs_map = ProgramsMap(programs);
-        let auth = SeahorseSigner {
-            account: &ctx.accounts.auth,
-            programs: &programs_map,
-        };
-
-        let premium_mint_reserve_acc = Empty {
-            account: dot::program::PremiumMintReserve::load(
-                &mut ctx.accounts.premium_mint_reserve_acc,
-                &programs_map,
-            ),
-            bump: ctx.bumps.get("premium_mint_reserve_acc").map(|bump| *bump),
-        };
-
-        let premium_mint = SeahorseAccount {
-            account: &ctx.accounts.premium_mint,
-            programs: &programs_map,
-        };
-
-        let premium_account = Empty {
-            account: SeahorseAccount {
-                account: &ctx.accounts.premium_account,
-                programs: &programs_map,
-            },
-            bump: ctx.bumps.get("premium_account").map(|bump| *bump),
-        };
-
-        let clock = &ctx.accounts.clock.clone();
-
-        create_premium_mint_reserve_handler(
-            auth.clone(),
-            premium_mint_reserve_acc.clone(),
-            premium_mint.clone(),
-            premium_account.clone(),
-            go_live_timestamp,
-            clock.clone(),
-            normal_mints,
-            seed_string,
-        );
-
-        dot::program::PremiumMintReserve::store(premium_mint_reserve_acc.account);
 
         return Ok(());
     }
@@ -614,6 +388,232 @@ mod token_swap {
         dot::program::PremiumMintReserve::store(premium_mint_reserve_acc);
 
         dot::program::NormalMintReserve::store(normal_mint_reserve_acc);
+
+        return Ok(());
+    }
+
+    #[derive(Accounts)]
+    # [instruction (amount : u64)]
+    pub struct WithdrawPremiumTokens<'info> {
+        #[account(mut)]
+        pub authority: Signer<'info>,
+        #[account(mut)]
+        pub premium_mint_reserve_acc: Box<Account<'info, dot::program::PremiumMintReserve>>,
+        #[account(mut)]
+        pub premium_account: Box<Account<'info, TokenAccount>>,
+        #[account(mut)]
+        pub destination: Box<Account<'info, TokenAccount>>,
+        pub token_program: Program<'info, Token>,
+    }
+
+    pub fn withdraw_premium_tokens(ctx: Context<WithdrawPremiumTokens>, amount: u64) -> Result<()> {
+        let mut programs = HashMap::new();
+
+        programs.insert(
+            "token_program",
+            ctx.accounts.token_program.to_account_info(),
+        );
+
+        let programs_map = ProgramsMap(programs);
+        let authority = SeahorseSigner {
+            account: &ctx.accounts.authority,
+            programs: &programs_map,
+        };
+
+        let premium_mint_reserve_acc = dot::program::PremiumMintReserve::load(
+            &mut ctx.accounts.premium_mint_reserve_acc,
+            &programs_map,
+        );
+
+        let premium_account = SeahorseAccount {
+            account: &ctx.accounts.premium_account,
+            programs: &programs_map,
+        };
+
+        let destination = SeahorseAccount {
+            account: &ctx.accounts.destination,
+            programs: &programs_map,
+        };
+
+        withdraw_premium_tokens_handler(
+            authority.clone(),
+            premium_mint_reserve_acc.clone(),
+            premium_account.clone(),
+            destination.clone(),
+            amount,
+        );
+
+        dot::program::PremiumMintReserve::store(premium_mint_reserve_acc);
+
+        return Ok(());
+    }
+
+    #[derive(Accounts)]
+    # [instruction (go_live_timestamp : i64 , normal_mints : u32 , seed_string : String)]
+    pub struct CreatePremiumMintReserve<'info> {
+        #[account(mut)]
+        pub payer: Signer<'info>,
+        # [account (init , space = std :: mem :: size_of :: < dot :: program :: PremiumMintReserve > () + 8 , payer = payer , seeds = ["premium-reserve" . as_bytes () . as_ref () , premium_mint . key () . as_ref () , seed_string . as_bytes () . as_ref ()] , bump)]
+        pub premium_mint_reserve_acc: Box<Account<'info, dot::program::PremiumMintReserve>>,
+        #[account(mut)]
+        pub premium_mint: Box<Account<'info, Mint>>,
+        # [account (init , payer = payer , seeds = ["premium-tokens" . as_bytes () . as_ref ()] , bump , token :: mint = premium_mint , token :: authority = premium_mint_reserve_acc)]
+        pub premium_account: Box<Account<'info, TokenAccount>>,
+        #[account(mut)]
+        pub clock: Sysvar<'info, Clock>,
+        pub system_program: Program<'info, System>,
+        pub token_program: Program<'info, Token>,
+        pub rent: Sysvar<'info, Rent>,
+    }
+
+    pub fn create_premium_mint_reserve(
+        ctx: Context<CreatePremiumMintReserve>,
+        go_live_timestamp: i64,
+        normal_mints: u32,
+        seed_string: String,
+    ) -> Result<()> {
+        let mut programs = HashMap::new();
+
+        programs.insert(
+            "system_program",
+            ctx.accounts.system_program.to_account_info(),
+        );
+
+        programs.insert(
+            "token_program",
+            ctx.accounts.token_program.to_account_info(),
+        );
+
+        let programs_map = ProgramsMap(programs);
+        let payer = SeahorseSigner {
+            account: &ctx.accounts.payer,
+            programs: &programs_map,
+        };
+
+        let premium_mint_reserve_acc = Empty {
+            account: dot::program::PremiumMintReserve::load(
+                &mut ctx.accounts.premium_mint_reserve_acc,
+                &programs_map,
+            ),
+            bump: ctx.bumps.get("premium_mint_reserve_acc").map(|bump| *bump),
+        };
+
+        let premium_mint = SeahorseAccount {
+            account: &ctx.accounts.premium_mint,
+            programs: &programs_map,
+        };
+
+        let premium_account = Empty {
+            account: SeahorseAccount {
+                account: &ctx.accounts.premium_account,
+                programs: &programs_map,
+            },
+            bump: ctx.bumps.get("premium_account").map(|bump| *bump),
+        };
+
+        let clock = &ctx.accounts.clock.clone();
+
+        create_premium_mint_reserve_handler(
+            payer.clone(),
+            premium_mint_reserve_acc.clone(),
+            premium_mint.clone(),
+            premium_account.clone(),
+            go_live_timestamp,
+            clock.clone(),
+            normal_mints,
+            seed_string,
+        );
+
+        dot::program::PremiumMintReserve::store(premium_mint_reserve_acc.account);
+
+        return Ok(());
+    }
+
+    #[derive(Accounts)]
+    # [instruction (go_live_ts : i64 , initialization_ts : i64)]
+    pub struct CreateNormalMintReserve<'info> {
+        #[account(mut)]
+        pub payer: Signer<'info>,
+        # [account (init , payer = payer , seeds = ["normal-token-account" . as_bytes () . as_ref ()] , bump , token :: mint = normal_mint , token :: authority = normal_mint_reserve_acc)]
+        pub normal_token_account: Box<Account<'info, TokenAccount>>,
+        # [account (init , space = std :: mem :: size_of :: < dot :: program :: NormalMintReserve > () + 8 , payer = payer , seeds = ["normal-mint-reserve" . as_bytes () . as_ref ()] , bump)]
+        pub normal_mint_reserve_acc: Box<Account<'info, dot::program::NormalMintReserve>>,
+        #[account(mut)]
+        pub premium_mint_reserve_acc: Box<Account<'info, dot::program::PremiumMintReserve>>,
+        #[account(mut)]
+        pub normal_mint: Box<Account<'info, Mint>>,
+        #[account(mut)]
+        pub clock: Sysvar<'info, Clock>,
+        pub token_program: Program<'info, Token>,
+        pub rent: Sysvar<'info, Rent>,
+        pub system_program: Program<'info, System>,
+    }
+
+    pub fn create_normal_mint_reserve(
+        ctx: Context<CreateNormalMintReserve>,
+        go_live_ts: i64,
+        initialization_ts: i64,
+    ) -> Result<()> {
+        let mut programs = HashMap::new();
+
+        programs.insert(
+            "token_program",
+            ctx.accounts.token_program.to_account_info(),
+        );
+
+        programs.insert(
+            "system_program",
+            ctx.accounts.system_program.to_account_info(),
+        );
+
+        let programs_map = ProgramsMap(programs);
+        let payer = SeahorseSigner {
+            account: &ctx.accounts.payer,
+            programs: &programs_map,
+        };
+
+        let normal_token_account = Empty {
+            account: SeahorseAccount {
+                account: &ctx.accounts.normal_token_account,
+                programs: &programs_map,
+            },
+            bump: ctx.bumps.get("normal_token_account").map(|bump| *bump),
+        };
+
+        let normal_mint_reserve_acc = Empty {
+            account: dot::program::NormalMintReserve::load(
+                &mut ctx.accounts.normal_mint_reserve_acc,
+                &programs_map,
+            ),
+            bump: ctx.bumps.get("normal_mint_reserve_acc").map(|bump| *bump),
+        };
+
+        let premium_mint_reserve_acc = dot::program::PremiumMintReserve::load(
+            &mut ctx.accounts.premium_mint_reserve_acc,
+            &programs_map,
+        );
+
+        let normal_mint = SeahorseAccount {
+            account: &ctx.accounts.normal_mint,
+            programs: &programs_map,
+        };
+
+        let clock = &ctx.accounts.clock.clone();
+
+        create_normal_mint_reserve_handler(
+            payer.clone(),
+            normal_token_account.clone(),
+            normal_mint_reserve_acc.clone(),
+            premium_mint_reserve_acc.clone(),
+            normal_mint.clone(),
+            go_live_ts,
+            initialization_ts,
+            clock.clone(),
+        );
+
+        dot::program::NormalMintReserve::store(normal_mint_reserve_acc.account);
+
+        dot::program::PremiumMintReserve::store(premium_mint_reserve_acc);
 
         return Ok(());
     }

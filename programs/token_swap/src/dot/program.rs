@@ -97,7 +97,7 @@ pub struct PremiumMintReserve {
     pub go_live_timestamp: i64,
     pub initialization_timestamp: i64,
     pub normal_mints: u32,
-    pub authority: Pubkey,
+    pub creator: Pubkey,
     pub seed_string: String,
     pub bump: u8,
     pub token_bump: u8,
@@ -113,7 +113,7 @@ impl<'info, 'entrypoint> PremiumMintReserve {
         let go_live_timestamp = account.go_live_timestamp;
         let initialization_timestamp = account.initialization_timestamp;
         let normal_mints = account.normal_mints;
-        let authority = account.authority.clone();
+        let creator = account.creator.clone();
         let seed_string = account.seed_string.clone();
         let bump = account.bump;
         let token_bump = account.token_bump;
@@ -126,7 +126,7 @@ impl<'info, 'entrypoint> PremiumMintReserve {
             go_live_timestamp,
             initialization_timestamp,
             normal_mints,
-            authority,
+            creator,
             seed_string,
             bump,
             token_bump,
@@ -155,9 +155,9 @@ impl<'info, 'entrypoint> PremiumMintReserve {
 
         loaded.__account__.normal_mints = normal_mints;
 
-        let authority = loaded.authority.clone();
+        let creator = loaded.creator.clone();
 
-        loaded.__account__.authority = authority;
+        loaded.__account__.creator = creator;
 
         let seed_string = loaded.seed_string.clone();
 
@@ -182,69 +182,10 @@ pub struct LoadedPremiumMintReserve<'info, 'entrypoint> {
     pub go_live_timestamp: i64,
     pub initialization_timestamp: i64,
     pub normal_mints: u32,
-    pub authority: Pubkey,
+    pub creator: Pubkey,
     pub seed_string: String,
     pub bump: u8,
     pub token_bump: u8,
-}
-
-pub fn create_normal_mint_reserve_handler<'info>(
-    mut auth: SeahorseSigner<'info, '_>,
-    mut normal_token_account: Empty<SeahorseAccount<'info, '_, TokenAccount>>,
-    mut normal_mint_reserve_acc: Empty<Mutable<LoadedNormalMintReserve<'info, '_>>>,
-    mut premium_mint_reserve_acc: Mutable<LoadedPremiumMintReserve<'info, '_>>,
-    mut normal_mint: SeahorseAccount<'info, '_, Mint>,
-    mut go_live_ts: i64,
-    mut initialization_ts: i64,
-    mut clock: Sysvar<'info, Clock>,
-) -> () {
-    let mut bump = normal_mint_reserve_acc.bump.unwrap();
-    let mut normal_mint_reserve_acc = normal_mint_reserve_acc.account.clone();
-    let mut token_bump = normal_token_account.bump.unwrap();
-    let mut normal_token_account = normal_token_account.account.clone();
-
-    if !(premium_mint_reserve_acc.borrow().premium_mint != normal_mint.key()) {
-        panic!("premium mint can't be the same as normal mint");
-    }
-
-    if !(premium_mint_reserve_acc.borrow().authority == auth.key()) {
-        panic!("authorities do not match");
-    }
-
-    assign!(
-        normal_mint_reserve_acc
-            .borrow_mut()
-            .premium_mint_reserve_acc,
-        premium_mint_reserve_acc.borrow().__account__.key()
-    );
-
-    assign!(
-        normal_mint_reserve_acc.borrow_mut().normal_mint,
-        normal_mint.key()
-    );
-
-    assign!(
-        normal_mint_reserve_acc.borrow_mut().normal_token_account,
-        normal_token_account.key()
-    );
-
-    assign!(
-        normal_mint_reserve_acc.borrow_mut().initialization_ts,
-        initialization_ts
-    );
-
-    assign!(normal_mint_reserve_acc.borrow_mut().bump, bump);
-
-    assign!(normal_mint_reserve_acc.borrow_mut().token_bump, token_bump);
-
-    if go_live_ts < clock.unix_timestamp {
-        assign!(
-            normal_mint_reserve_acc.borrow_mut().go_live_ts,
-            clock.unix_timestamp
-        );
-    } else {
-        assign!(normal_mint_reserve_acc.borrow_mut().go_live_ts, go_live_ts);
-    }
 }
 
 pub fn swap_premium_tokens_for_normal_tokens_handler<'info>(
@@ -316,38 +257,6 @@ pub fn swap_premium_tokens_for_normal_tokens_handler<'info>(
     .unwrap();
 }
 
-pub fn withdraw_premium_tokens_handler<'info>(
-    mut authority: SeahorseSigner<'info, '_>,
-    mut premium_mint_reserve_acc: Mutable<LoadedPremiumMintReserve<'info, '_>>,
-    mut premium_account: SeahorseAccount<'info, '_, TokenAccount>,
-    mut destination: SeahorseAccount<'info, '_, TokenAccount>,
-    mut amount: u64,
-) -> () {
-    if !(premium_mint_reserve_acc.borrow().authority == authority.key()) {
-        panic!("Invalid Authority");
-    }
-
-    if !(premium_mint_reserve_acc.borrow().premium_account == premium_account.key()) {
-        panic!("Invalid Premium token account");
-    }
-
-    token::transfer(
-        CpiContext::new(
-            premium_account.programs.get("token_program"),
-            token::Transfer {
-                from: premium_account.to_account_info(),
-                authority: premium_mint_reserve_acc
-                    .borrow()
-                    .__account__
-                    .to_account_info(),
-                to: destination.to_account_info(),
-            },
-        ),
-        amount,
-    )
-    .unwrap();
-}
-
 pub fn withdraw_normal_tokens_handler<'info>(
     mut authority: SeahorseSigner<'info, '_>,
     mut premium_mint_reserve_acc: Mutable<LoadedPremiumMintReserve<'info, '_>>,
@@ -356,7 +265,7 @@ pub fn withdraw_normal_tokens_handler<'info>(
     mut destination: SeahorseAccount<'info, '_, TokenAccount>,
     mut amount: u64,
 ) -> () {
-    if !(premium_mint_reserve_acc.borrow().authority == authority.key()) {
+    if !(premium_mint_reserve_acc.borrow().creator == authority.key()) {
         panic!("Invalid authority");
     }
 
@@ -385,65 +294,6 @@ pub fn withdraw_normal_tokens_handler<'info>(
         amount,
     )
     .unwrap();
-}
-
-pub fn create_premium_mint_reserve_handler<'info>(
-    mut auth: SeahorseSigner<'info, '_>,
-    mut premium_mint_reserve_acc: Empty<Mutable<LoadedPremiumMintReserve<'info, '_>>>,
-    mut premium_mint: SeahorseAccount<'info, '_, Mint>,
-    mut premium_account: Empty<SeahorseAccount<'info, '_, TokenAccount>>,
-    mut go_live_timestamp: i64,
-    mut clock: Sysvar<'info, Clock>,
-    mut normal_mints: u32,
-    mut seed_string: String,
-) -> () {
-    let mut bump = premium_mint_reserve_acc.bump.unwrap();
-    let mut premium_mint_reserve_acc = premium_mint_reserve_acc.account.clone();
-    let mut token_bump = premium_account.bump.unwrap();
-    let mut premium_account = premium_account.account.clone();
-
-    assign!(
-        premium_mint_reserve_acc.borrow_mut().premium_mint,
-        premium_mint.key()
-    );
-
-    assign!(
-        premium_mint_reserve_acc.borrow_mut().premium_account,
-        premium_account.key()
-    );
-
-    assign!(
-        premium_mint_reserve_acc
-            .borrow_mut()
-            .initialization_timestamp,
-        clock.unix_timestamp
-    );
-
-    assign!(
-        premium_mint_reserve_acc.borrow_mut().seed_string,
-        seed_string
-    );
-
-    assign!(premium_mint_reserve_acc.borrow_mut().bump, bump);
-
-    assign!(premium_mint_reserve_acc.borrow_mut().token_bump, token_bump);
-
-    assign!(
-        premium_mint_reserve_acc.borrow_mut().normal_mints,
-        normal_mints
-    );
-
-    if go_live_timestamp < clock.unix_timestamp {
-        assign!(
-            premium_mint_reserve_acc.borrow_mut().go_live_timestamp,
-            clock.unix_timestamp
-        );
-    } else {
-        assign!(
-            premium_mint_reserve_acc.borrow_mut().go_live_timestamp,
-            go_live_timestamp
-        );
-    }
 }
 
 pub fn swap_normal_tokens_for_premium_tokens_handler<'info>(
@@ -513,4 +363,156 @@ pub fn swap_normal_tokens_for_premium_tokens_handler<'info>(
         amount,
     )
     .unwrap();
+}
+
+pub fn withdraw_premium_tokens_handler<'info>(
+    mut authority: SeahorseSigner<'info, '_>,
+    mut premium_mint_reserve_acc: Mutable<LoadedPremiumMintReserve<'info, '_>>,
+    mut premium_account: SeahorseAccount<'info, '_, TokenAccount>,
+    mut destination: SeahorseAccount<'info, '_, TokenAccount>,
+    mut amount: u64,
+) -> () {
+    if !(premium_mint_reserve_acc.borrow().creator == authority.key()) {
+        panic!("Invalid Authority");
+    }
+
+    if !(premium_mint_reserve_acc.borrow().premium_account == premium_account.key()) {
+        panic!("Invalid Premium token account");
+    }
+
+    token::transfer(
+        CpiContext::new(
+            premium_account.programs.get("token_program"),
+            token::Transfer {
+                from: premium_account.to_account_info(),
+                authority: premium_mint_reserve_acc
+                    .borrow()
+                    .__account__
+                    .to_account_info(),
+                to: destination.to_account_info(),
+            },
+        ),
+        amount,
+    )
+    .unwrap();
+}
+
+pub fn create_premium_mint_reserve_handler<'info>(
+    mut payer: SeahorseSigner<'info, '_>,
+    mut premium_mint_reserve_acc: Empty<Mutable<LoadedPremiumMintReserve<'info, '_>>>,
+    mut premium_mint: SeahorseAccount<'info, '_, Mint>,
+    mut premium_account: Empty<SeahorseAccount<'info, '_, TokenAccount>>,
+    mut go_live_timestamp: i64,
+    mut clock: Sysvar<'info, Clock>,
+    mut normal_mints: u32,
+    mut seed_string: String,
+) -> () {
+    let mut bump = premium_mint_reserve_acc.bump.unwrap();
+    let mut premium_mint_reserve_acc = premium_mint_reserve_acc.account.clone();
+    let mut token_bump = premium_account.bump.unwrap();
+    let mut premium_account = premium_account.account.clone();
+
+    assign!(
+        premium_mint_reserve_acc.borrow_mut().premium_mint,
+        premium_mint.key()
+    );
+
+    assign!(
+        premium_mint_reserve_acc.borrow_mut().premium_account,
+        premium_account.key()
+    );
+
+    assign!(
+        premium_mint_reserve_acc
+            .borrow_mut()
+            .initialization_timestamp,
+        clock.unix_timestamp
+    );
+
+    assign!(
+        premium_mint_reserve_acc.borrow_mut().seed_string,
+        seed_string
+    );
+
+    assign!(premium_mint_reserve_acc.borrow_mut().creator, payer.key());
+
+    assign!(premium_mint_reserve_acc.borrow_mut().bump, bump);
+
+    assign!(premium_mint_reserve_acc.borrow_mut().token_bump, token_bump);
+
+    assign!(
+        premium_mint_reserve_acc.borrow_mut().normal_mints,
+        normal_mints
+    );
+
+    if go_live_timestamp < clock.unix_timestamp {
+        assign!(
+            premium_mint_reserve_acc.borrow_mut().go_live_timestamp,
+            clock.unix_timestamp
+        );
+    } else {
+        assign!(
+            premium_mint_reserve_acc.borrow_mut().go_live_timestamp,
+            go_live_timestamp
+        );
+    }
+}
+
+pub fn create_normal_mint_reserve_handler<'info>(
+    mut payer: SeahorseSigner<'info, '_>,
+    mut normal_token_account: Empty<SeahorseAccount<'info, '_, TokenAccount>>,
+    mut normal_mint_reserve_acc: Empty<Mutable<LoadedNormalMintReserve<'info, '_>>>,
+    mut premium_mint_reserve_acc: Mutable<LoadedPremiumMintReserve<'info, '_>>,
+    mut normal_mint: SeahorseAccount<'info, '_, Mint>,
+    mut go_live_ts: i64,
+    mut initialization_ts: i64,
+    mut clock: Sysvar<'info, Clock>,
+) -> () {
+    let mut bump = normal_mint_reserve_acc.bump.unwrap();
+    let mut normal_mint_reserve_acc = normal_mint_reserve_acc.account.clone();
+    let mut token_bump = normal_token_account.bump.unwrap();
+    let mut normal_token_account = normal_token_account.account.clone();
+
+    if !(premium_mint_reserve_acc.borrow().premium_mint != normal_mint.key()) {
+        panic!("premium mint can't be the same as normal mint");
+    }
+
+    if !(premium_mint_reserve_acc.borrow().creator == payer.key()) {
+        panic!("creators do not match");
+    }
+
+    assign!(
+        normal_mint_reserve_acc
+            .borrow_mut()
+            .premium_mint_reserve_acc,
+        premium_mint_reserve_acc.borrow().__account__.key()
+    );
+
+    assign!(
+        normal_mint_reserve_acc.borrow_mut().normal_mint,
+        normal_mint.key()
+    );
+
+    assign!(
+        normal_mint_reserve_acc.borrow_mut().normal_token_account,
+        normal_token_account.key()
+    );
+
+    assign!(
+        normal_mint_reserve_acc.borrow_mut().initialization_ts,
+        initialization_ts
+    );
+
+    assign!(normal_mint_reserve_acc.borrow_mut().bump, bump);
+
+    assign!(normal_mint_reserve_acc.borrow_mut().token_bump, token_bump);
+
+    if go_live_ts < clock.unix_timestamp {
+        assign!(
+            normal_mint_reserve_acc.borrow_mut().go_live_ts,
+            clock.unix_timestamp
+        );
+    } else {
+        assign!(normal_mint_reserve_acc.borrow_mut().go_live_ts, go_live_ts);
+    }
 }
