@@ -23,7 +23,7 @@ class PremiumMintReserve(Account):
   # the creator of the reserve
   creator: Pubkey
   #seed string for seeds
-  seed_string: str
+  random_hash: str
   #bump generated when creating this PremiumMintReserve PDA
   bump: u8
   # bump generated when creating premium token account
@@ -55,12 +55,12 @@ def create_premium_mint_reserve(
   go_live_timestamp: i64, 
   clock: Clock,
   normal_mints: u32, 
-  seed_string: str,
+  random_hash: str,
 ):
  bump = premium_mint_reserve_acc.bump()
  premium_mint_reserve_acc = premium_mint_reserve_acc.init(
   payer = payer, 
-  seeds = ['premium-reserve', premium_mint, seed_string],
+  seeds = ['premium-reserve', premium_mint, random_hash],
  )
  token_bump = premium_account.bump()
  premium_account = premium_account.init(
@@ -74,7 +74,7 @@ def create_premium_mint_reserve(
  premium_mint_reserve_acc.premium_mint = premium_mint.key()
  premium_mint_reserve_acc.premium_account = premium_account.key()
  premium_mint_reserve_acc.initialization_timestamp = clock.unix_timestamp()
- premium_mint_reserve_acc.seed_string  = seed_string
+ premium_mint_reserve_acc.random_hash  = random_hash
  premium_mint_reserve_acc.creator = payer.key()
  premium_mint_reserve_acc.bump = bump
  premium_mint_reserve_acc.token_bump = token_bump
